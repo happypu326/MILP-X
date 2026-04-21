@@ -4,7 +4,7 @@ A comprehensive benchmark framework for training and evaluating Graph Neural Net
 
 ## Overview
 
-X-MILP is a research framework designed to:
+MILP-X is a research framework designed to:
 - Generate diverse MILP problem instances across 16+ problem types
 - Train Graph Neural Networks to solve or approximate solutions for MILPs
 - Benchmark different learning methods against commercial solvers (Gurobi, SCIP)
@@ -21,7 +21,7 @@ X-MILP is a research framework designed to:
 ## Project Structure
 
 ```
-X-MILP/
+MILP-X/
 ├── configs/              # Configuration files (YAML)
 │   ├── preprocess/       # Data preprocessing configurations
 │   ├── train/           # Training configurations for different methods
