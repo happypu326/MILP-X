@@ -1,0 +1,54 @@
+# Basic settings
+method_type: RoME
+task:
+  - IS
+  - IP
+  - SC
+difficulty: hard
+gurobi_time: "3600s"
+solver_settings: gurobi
+
+device: cuda:5
+seed: 0
+
+# Data
+data_dir: ./dataset
+batch_size: 1
+num_workers: 0
+train_split: 0.7
+
+# Model
+gnn_type: moe
+emb_size: 64
+constraint_nfeats: 4
+edge_nfeats: 1
+variable_nfeats: 6
+num_shared_experts: 1
+num_dedicate_experts: 3
+top_k: 1
+gate_temperature: 1.0
+bias_lr: 1.0e-3
+dropout: 0.1
+use_dro: true
+eps_wasserstein: 0.1
+dro_perturb_type: gaussian
+
+# Training
+lr: 0.00001
+num_epochs: 2000
+patience: 100
+min_delta: 1.0e-5
+robust: true
+alpha: 0.2
+generalization_adjustment: "0.0"
+robust_step_size: 0.001
+use_normalized_loss: true
+btl: false
+gamma: 0.1
+minimum_variational_weight: 0
+other_loss_ratio: 0.15
+
+# Saving
+model_save_dir: ./pretrain_models
+log_save_dir: ./train_logs
+save_top_k: 3

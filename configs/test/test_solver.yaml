@@ -1,0 +1,15 @@
+# Basic settings
+problem_type: SC
+difficulty: easy
+input_dir: ./data/train
+
+# Solver configuration
+solver: gurobi
+max_time: 10
+threads: 1
+test_num: 100
+num_workers: 5
+
+# Paths
+log_dir: ./test_logs/${solver}/${problem_type}/${difficulty}/${max_time}s
+result_dir: ./test_results/${solver}/${problem_type}/${difficulty}/${max_time}s

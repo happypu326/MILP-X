@@ -1,0 +1,50 @@
+# Basic settings
+method_type: DiffILO
+task: CA
+difficulty: easy
+gurobi_time: "100s"
+solver_settings: gurobi
+
+device: cuda:0
+seed: 2
+
+# Data
+data_dir: ./dataset/train
+batch_size: 5
+num_workers: 2
+train_split: 0.8
+
+# Model
+gnn_type: diffilo
+emb_size: 32
+constraint_nfeats: 3
+edge_nfeats: 1
+variable_nfeats: 5
+depth: 6
+
+# Training
+num_epochs: 1200
+patience: 100
+min_delta: 1.0e-5
+lr_i: 0.0001  
+lr_o: 0.0001  
+lr_scheduler: cos
+optimizer: adam
+weight_decay: 0.0
+momentum: 0.9
+cos_T: 200
+cos_min: 0.0
+loss_config: normalize
+num_samples: 15
+mu_init: 5.0
+mu_step_size: 0.01
+mu_value: 1.0
+mu_max: 5.0
+mu_min: 0.1
+
+# Saving
+model_save_dir: ./pretrain_models
+log_save_dir: ./train_logs
+save_top_k: 3
+
+

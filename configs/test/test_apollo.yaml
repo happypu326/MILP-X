@@ -1,0 +1,34 @@
+# Basic settings
+method_type: Apollo
+test_problem_type: MIS
+difficulty: easy
+
+device: cuda:0
+seed: 0
+
+instance_dir: ./data/test
+
+# Model configuration
+num_workers: 20
+gnn_type: gcn
+emb_size: 64
+constraint_nfeats: 4
+edge_nfeats: 1
+variable_nfeats: 6
+
+# Apollo multi-step solving configuration
+time_limits: [100, 100, 200, 600]  
+k0_list: [100, 40, 20, 1]  
+k1_list: [20, 15, 15, 5]  
+delta_list: [50, 50, 30, 10]  
+
+# Solver configuration
+solver: gurobi
+threads: 1
+mip_focus: 1
+
+# Paths
+time_flag: "20260404_084936"
+model_path: ./pretrain_models/${method_type}/${test_problem_type}/${time_flag}_${gnn_type}_model_best.pth
+log_dir: ./test_logs/${method_type}/${solver}/${test_problem_type}/${difficulty}/${time_limits}s/${time_flag}/
+result_dir: ./test_results/${method_type}/${solver}/${test_problem_type}/${difficulty}/${time_limits}s/${time_flag}/

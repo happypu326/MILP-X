@@ -1,0 +1,43 @@
+# Basic settings
+method_type: DiffILO
+test_problem_type: CA
+difficulty: easy
+
+device: cuda:0
+seed: 2
+
+instance_dir: ./data/test
+
+# Model configuration
+gnn_type: diffilo
+emb_size: 32
+constraint_nfeats: 3
+edge_nfeats: 1
+variable_nfeats: 5
+depth: 6
+
+# Testing configuration
+train_num_samples: 15
+mu_init: 5.0
+mu_step_size: 0.01
+mu_value: 1.0
+mu_max: 5.0
+mu_min: 0.1
+lr_i: 0.0001  
+lr_o: 0.0001
+num_samples: 1000
+delta: 1000
+mu: 0  
+
+# Solver configuration
+solver: gurobi
+time_limit: 1000
+threads: 1
+mip_focus: 1
+num_workers: 20
+
+# Paths
+time_flag: "20260404_142921"
+model_path: ./pretrain_models/${method_type}/${test_problem_type}/${time_flag}_emb_${emb_size}_dep_${depth}_ns_${train_num_samples}_loss_normalize_mu_${mu_init}_${mu_step_size}_${mu_value}_${mu_min}_${mu_max}_lr_${lr_i}_${lr_o}_model_best.pth
+log_dir: ./test_logs/${method_type}/${solver}/${test_problem_type}/${difficulty}/${time_limit}s/${time_flag}/
+result_dir: ./test_results/${method_type}/${solver}/${test_problem_type}/${difficulty}/${time_limit}s/${time_flag}/
