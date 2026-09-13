@@ -25,6 +25,13 @@ def main():
     problem_types = list(cfg.task)
     problem_type_str = '_'.join(problem_types)
 
+    use_edge_coeff = cfg.get('use_edge_coeff', True)
+    expected_edge = 2 if use_edge_coeff else 1
+    assert cfg.edge_nfeats == expected_edge, (
+        f"edge_nfeats ({cfg.edge_nfeats}) must be {expected_edge} for "
+        f"use_edge_coeff={use_edge_coeff}"
+    )
+
     train_loader, val_loader = create_dataloaders(
         method_type=cfg.method_type,
         problem_type=cfg.task,
@@ -34,7 +41,8 @@ def main():
         batch_size=cfg.batch_size,
         num_workers=cfg.num_workers,
         train_split=cfg.train_split,
-        solver_settings=cfg.solver_settings
+        solver_settings=cfg.solver_settings,
+        use_edge_coeff=use_edge_coeff,
     )
 
     train_groups = []

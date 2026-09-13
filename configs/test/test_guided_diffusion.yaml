@@ -1,0 +1,44 @@
+# Basic settings
+method_type: GuidedDiffusion
+test_problem_type: MIS
+difficulty: easy
+device: cuda:0
+seed: 0
+instance_dir: ./data/test
+
+# Model
+gnn_type: guided_diffusion
+emb_size: 64
+latent_dim: 64
+constraint_nfeats: 4
+use_edge_coeff: true
+edge_nfeats: 2
+variable_nfeats: 6
+
+# Latent-diffusion sampling
+num_timesteps: 200
+n_samples: 4
+feasibility_projection: true
+proj_steps: 5
+proj_lr: 0.1
+
+# Trust-region search
+fix_strategy: pas
+hyperparam_pas:
+  MIS: [600, 600, 100]
+hyperparam_soft:
+  MIS: [0.95, 0.05]
+
+# Solver
+solver: gurobi
+time_limits: 1000
+threads: 1
+num_workers: 20
+
+# Paths
+time_flag: "20260404_000000"
+model_path: ./pretrain_models/${method_type}/${test_problem_type}/${time_flag}_guided_diffusion_model_best.pth
+log_dir: ./test_logs/${method_type}/${solver}/${test_problem_type}/${difficulty}/${time_limits}s/${time_flag}/
+result_dir: ./test_results/${method_type}/${solver}/${test_problem_type}/${difficulty}/${time_limits}s/${time_flag}/
+scores_dir: ./scores/${method_type}/${solver}/${test_problem_type}/${difficulty}/${time_limits}s/${time_flag}/
+save_scores: True

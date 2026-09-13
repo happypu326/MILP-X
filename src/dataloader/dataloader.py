@@ -17,7 +17,8 @@ def create_dataloaders(
     solver_settings: str = "gurobi",
     train_shuffle: bool = True,
     val_shuffle: bool = False,
-    problem_class_map: Optional[dict] = None
+    problem_class_map: Optional[dict] = None,
+    use_edge_coeff: bool = True,
 ) -> Tuple[torch_geometric.loader.DataLoader, torch_geometric.loader.DataLoader]:
     """
     Create data loaders
@@ -81,8 +82,8 @@ def create_dataloaders(
     train_files = sample_files[:split_idx]
     val_files = sample_files[split_idx:]
     
-    train_dataset = GraphDataset(train_files, method_type)
-    val_dataset = GraphDataset(val_files, method_type)
+    train_dataset = GraphDataset(train_files, method_type, use_edge_coeff=use_edge_coeff)
+    val_dataset = GraphDataset(val_files, method_type, use_edge_coeff=use_edge_coeff)
     
     if method_type == 'DiffILO':
         train_loader = torch_geometric.loader.DataLoader(

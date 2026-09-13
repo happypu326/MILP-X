@@ -49,6 +49,7 @@ def build_eval_config(cfg_dict, device, worker_id, worker_log_root, worker_resul
         'save_scores': cfg_dict["save_scores"],
         'hyperparam_pas': cfg_dict["hyperparam_pas"],
         'hyperparam_soft': cfg_dict["hyperparam_soft"],
+        'use_edge_coeff': cfg_dict.get("use_edge_coeff", True),
         'test_num': chunk_size,
     }
 
@@ -57,6 +58,13 @@ def main():
     cfg = OmegaConf.load('configs/test/test_ps.yaml')
     cfg = OmegaConf.merge(cfg, OmegaConf.from_dotlist(sys.argv[1:]))
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+
+    use_edge_coeff = cfg_dict.get("use_edge_coeff", True)
+    expected_edge = 2 if use_edge_coeff else 1
+    assert cfg_dict["edge_nfeats"] == expected_edge, (
+        f"edge_nfeats ({cfg_dict['edge_nfeats']}) must be {expected_edge} for "
+        f"use_edge_coeff={use_edge_coeff}; must match the trained model."
+    )
 
     random.seed(cfg.seed)
     torch.manual_seed(cfg.seed)

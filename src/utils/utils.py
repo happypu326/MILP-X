@@ -6,7 +6,9 @@ import gurobipy as gp
 from gurobipy import GRB
 from collections import Counter
 import random
-import ecole
+# NOTE: `ecole` is only required by the DiffILO data path
+# (get_diffilo_data_train / get_diffilo_data_test). It is imported lazily inside
+# those functions so the PS / COCO / Apollo / RoME paths do not depend on it.
 
 
 device=torch.device("cpu")
@@ -351,6 +353,117 @@ def get_BG_from_GRB(ins_name):
     
     return A,v_map,v_nodes,c_nodes,b_vars       
     
+def build_edge_features(edge_indices, edge_values, use_edge_coeff=True,
+                        num_cons=None, normalize="per_constraint"):
+    """
+    Build the per-edge feature matrix for the constraint-variable bipartite graph.
+
+    Args:
+        edge_indices : LongTensor [2, E]. Row 0 = constraint (source) node id,
+                       row 1 = variable node id. This matches ``A._indices()``
+                       for the (ncons+1, nvars) sparse adjacency produced by
+                       ``get_a_new2`` (A is constraints x variables).
+        edge_values  : FloatTensor [E]. The raw coefficient a_ij on each edge
+                       (constant 1 for legacy BG files built before the
+                       real-coefficient switch).
+        use_edge_coeff : if False, reproduce the original Predict-and-Search
+                       behaviour (every edge feature = 1, edge_nfeats = 1). If
+                       True, return the 2-dim coefficient feature
+                       [normalized a_ij, sign(a_ij)] (edge_nfeats = 2).
+        num_cons     : number of constraint nodes (for per-constraint scatter).
+                       Inferred from edge_indices[0].max() if None.
+        normalize    : "per_constraint" -> a_ij / max_{j in row i} |a_ij|
+                       (row-wise, robust to constraint scale); "none" -> raw.
+
+    Returns:
+        FloatTensor [E, edge_nfeats].
+    """
+    edge_values = torch.as_tensor(edge_values, dtype=torch.float32).reshape(-1)
+    E = edge_values.shape[0]
+
+    if not use_edge_coeff:
+        return torch.ones(E, 1, dtype=torch.float32)
+
+    if E == 0:
+        return torch.zeros(0, 2, dtype=torch.float32)
+
+    cons_idx = edge_indices[0].long()
+    abs_val = edge_values.abs()
+
+    if normalize == "per_constraint":
+        if num_cons is None:
+            num_cons = int(cons_idx.max().item()) + 1
+        # row-wise max of |a_ij| via scatter-amax
+        row_max = torch.zeros(num_cons, dtype=torch.float32)
+        row_max = row_max.scatter_reduce(
+            0, cons_idx, abs_val, reduce="amax", include_self=False
+        )
+        denom = row_max[cons_idx].clamp(min=1e-8)
+        norm_coeff = edge_values / denom
+    else:
+        norm_coeff = edge_values
+
+    sign = torch.sign(edge_values)
+    return torch.stack([norm_coeff, sign], dim=1)
+
+
+def get_raw_constraints(ins_name):
+    """
+    Extract the raw (unnormalized) linear system for feasibility projection:
+    A (real coefficients), b (rhs), sense per constraint, in the SAME variable
+    order as get_a_new2 (variables sorted by name -> v_map).
+
+    Returns:
+        A_coo : sparse [ncons, nvars] with real coefficients a_ij
+        b     : FloatTensor [ncons] (rhs; for '>=' constraints stored as the lhs
+                bound with sense=1)
+        sense : LongTensor [ncons]  (0: <=, 1: >=, 2: ==)
+        v_map : dict varname -> column index
+        b_vars: LongTensor of binary-variable column indices
+    """
+    m = scp.Model()
+    m.hideOutput(True)
+    m.readProblem(ins_name)
+
+    mvars = m.getVars()
+    mvars.sort(key=lambda v: v.name)
+    v_map = {v.name: i for i, v in enumerate(mvars)}
+    nvars = len(mvars)
+    b_vars = [i for i, v in enumerate(mvars) if v.vtype() == 'BINARY']
+
+    cons = [c for c in m.getConss() if len(m.getValsLinear(c)) > 0]
+    rows, cols, vals, b_list, sense_list = [], [], [], [], []
+    for cind, c in enumerate(cons):
+        coeff = m.getValsLinear(c)
+        rhs, lhs = m.getRhs(c), m.getLhs(c)
+        sense = 0
+        if rhs == lhs:
+            sense = 2
+            b_val = rhs
+        elif rhs >= 1e+20:
+            sense = 1
+            b_val = lhs
+        else:
+            b_val = rhs
+        for k in coeff:
+            if coeff[k] != 0:
+                rows.append(cind)
+                cols.append(v_map[k])
+                vals.append(coeff[k])
+        b_list.append(b_val)
+        sense_list.append(sense)
+
+    ncons = len(cons)
+    A = torch.sparse_coo_tensor(
+        torch.tensor([rows, cols], dtype=torch.long),
+        torch.tensor(vals, dtype=torch.float32),
+        (ncons, nvars),
+    ).coalesce()
+    return (A, torch.tensor(b_list, dtype=torch.float32),
+            torch.tensor(sense_list, dtype=torch.long), v_map,
+            torch.tensor(b_vars, dtype=torch.long))
+
+
 def get_a_new2(ins_name):
     epsilon = 1e-6
 
@@ -360,6 +473,7 @@ def get_a_new2(ins_name):
 
     ncons = m.getNConss()
     nvars = m.getNVars()
+
 
     mvars = m.getVars()
     mvars.sort(key=lambda v: v.name)
@@ -390,6 +504,8 @@ def get_a_new2(ins_name):
     obj_cons = [0] * (nvars + 2)
     indices_spr = [[], []]
     values_spr = []
+    obj_edge_var = []   # objective edges, routed to the objective node (row ncons)
+    obj_edge_val = []
     obj_node = [0, 0, 0, 0]
     for e in obj:
         vnm = e.vartuple[0].name
@@ -397,10 +513,12 @@ def get_a_new2(ins_name):
         v_indx = v_map[vnm]
         obj_cons[v_indx] = v
         if v != 0:
-            indices_spr[0].append(0)
-            indices_spr[1].append(v_indx)
-            # values_spr.append(v)
-            values_spr.append(1)
+            # Route objective edges to the dedicated objective node (row `ncons`,
+            # appended after the constraints) instead of constraint row 0, so
+            # they no longer collide with constraint 0 / pollute its per-row
+            # coefficient normalization. Stores the real coefficient.
+            obj_edge_var.append(v_indx)
+            obj_edge_val.append(v)
         v_nodes[v_indx][0] = v
 
         obj_node[0] += v
@@ -443,7 +561,9 @@ def get_a_new2(ins_name):
             if coeff[k] != 0:
                 indices_spr[0].append(cind)
                 indices_spr[1].append(v_indx)
-                values_spr.append(1)
+                # Store the real constraint coefficient a_ij (was a constant 1
+                # in the original PS code). See build_edge_features().
+                values_spr.append(coeff[k])
             v_nodes[v_indx][2] += 1
             v_nodes[v_indx][1] += coeff[k] / lcons
             v_nodes[v_indx][3] = max(v_nodes[v_indx][3], coeff[k])
@@ -452,11 +572,17 @@ def get_a_new2(ins_name):
         llc = max(len(coeff), 1)
         c_nodes.append([summation / llc, llc, rhs, sense])
     c_nodes.append(obj_node)
+    # objective node = row `ncons`; attach its edges (real objective coefficients)
+    for vi, vv in zip(obj_edge_var, obj_edge_val):
+        indices_spr[0].append(ncons)
+        indices_spr[1].append(vi)
+        values_spr.append(vv)
     v_nodes = torch.as_tensor(v_nodes, dtype=torch.float32).to(device)
     c_nodes = torch.as_tensor(c_nodes, dtype=torch.float32).to(device)
     b_vars = torch.as_tensor(b_vars, dtype=torch.int32).to(device)
 
-    A = torch.sparse_coo_tensor(indices_spr, values_spr, (ncons + 1, nvars)).to(device)
+    # coalesce so duplicate (row, col) entries are merged (no double-counted edges)
+    A = torch.sparse_coo_tensor(indices_spr, values_spr, (ncons + 1, nvars)).coalesce().to(device)
     clip_max = [20000, 1, torch.max(v_nodes, 0)[0][2].item()]
     clip_min = [0, -1, 0]
 
@@ -475,6 +601,9 @@ def get_a_new2(ins_name):
     maxs = torch.max(c_nodes, 0)[0]
     mins = torch.min(c_nodes, 0)[0]
     diff = maxs - mins
+    for ks in range(diff.shape[0]):
+        if diff[ks] == 0:
+            diff[ks] = 1
     c_nodes = c_nodes - mins
     c_nodes = c_nodes / diff
     c_nodes = torch.clamp(c_nodes, 1e-5, 1)
@@ -482,6 +611,7 @@ def get_a_new2(ins_name):
     return A, v_map, v_nodes, c_nodes, b_vars
 
 def get_diffilo_data_train(ins_name):
+    import ecole
     # extract the features from the instance file
     m = scp.Model()
     m.hideOutput(True)
@@ -602,6 +732,7 @@ def get_diffilo_data_train(ins_name):
     return graph, A, b, c
 
 def get_diffilo_data_test(ins_name):
+    import ecole
     from src.dataloader.graph_dataset import BipartiteNodeData
     m = scp.Model()
     m.hideOutput(True)

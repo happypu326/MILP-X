@@ -1,0 +1,40 @@
+# Basic settings
+method_type: NeuralDiving   # SelectiveNet prediction; coverage hard-fixing (dive) at test
+task: MVC
+difficulty: hard
+gurobi_time: "3600s"
+solver_settings: gurobi
+
+device: cuda:0
+seed: 0
+
+# Data
+data_dir: ./dataset
+batch_size: 1
+num_workers: 0
+train_split: 0.7
+
+# Real coefficient edges
+use_edge_coeff: true
+edge_nfeats: 2
+
+# Model
+emb_size: 64
+constraint_nfeats: 4
+variable_nfeats: 6
+
+# SelectiveNet loss
+target_coverage: 0.7    # fraction of variables the model should be willing to assign
+coverage_lambda: 16.0   # coverage-penalty weight
+aux_alpha: 0.5          # auxiliary (all-variable) prediction weight
+
+# Training
+lr: 0.00001
+num_epochs: 2000
+patience: 100
+min_delta: 1.0e-5
+
+# Saving
+model_save_dir: ./pretrain_models
+log_save_dir: ./train_logs
+save_top_k: 3

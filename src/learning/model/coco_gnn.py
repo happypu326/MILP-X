@@ -39,9 +39,9 @@ class CoCoGNNPolicy(torch.nn.Module):
         graph_norm_c_to_v_list = []
 
         for _ in range(self.depth):
-            conv_v_to_c_list.append(BipartiteGraphConvolution())
+            conv_v_to_c_list.append(BipartiteGraphConvolution(self.embd_size, self.edge_nfeats))
             graph_norm_v_to_c_list.append(GraphNorm(self.embd_size))
-            conv_c_to_v_list.append(BipartiteGraphConvolution())
+            conv_c_to_v_list.append(BipartiteGraphConvolution(self.embd_size, self.edge_nfeats))
             graph_norm_c_to_v_list.append(GraphNorm(self.embd_size))
 
         # Now set the Sequential containers
@@ -117,15 +117,13 @@ class BipartiteGraphConvolution(torch_geometric.nn.MessagePassing):
     to provide the exact form of the messages being passed.
     """
 
-    def __init__(self):
+    def __init__(self, emb_size=64, edge_nfeats=1):
         super().__init__("add")
-        emb_size = 64
-
         self.feature_module_left = torch.nn.Sequential(
             torch.nn.Linear(emb_size, emb_size)
         )
         self.feature_module_edge = torch.nn.Sequential(
-            torch.nn.Linear(1, emb_size, bias=False)
+            torch.nn.Linear(edge_nfeats, emb_size, bias=False)
         )
         self.feature_module_right = torch.nn.Sequential(
             torch.nn.Linear(emb_size, emb_size, bias=False)

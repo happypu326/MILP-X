@@ -7,7 +7,7 @@ from gurobipy import GRB
 from typing import List, Dict, Any
 import numpy as np
 from .base_evaluator import BaseEvaluator
-from src.utils.utils import get_a_new2, get_initial_best_obj
+from src.utils.utils import get_a_new2, get_initial_best_obj, build_edge_features
 from src.solver.solver_utils import SOLVER_CLASSES
 import datetime
 
@@ -25,6 +25,8 @@ class ApolloEvaluator(BaseEvaluator):
         self.threads = config.get("threads", 1)
         self.mip_focus = config.get("mip_focus", 1)
         self.problem = config.get("problem", "MIS")
+        # Must match training-time setting (see build_edge_features).
+        self.use_edge_coeff = config.get("use_edge_coeff", True)
 
     @torch.no_grad()
     def _get_scores(self, ins_path: str, fixing_status: Dict):
@@ -33,7 +35,12 @@ class ApolloEvaluator(BaseEvaluator):
         constraint_features = c_nodes.cpu()
         constraint_features[torch.isnan(constraint_features)] = 1
         edge_indices = A._indices()
-        edge_features = torch.ones(A._values().unsqueeze(1).shape)
+        edge_features = build_edge_features(
+            edge_indices,
+            A._values(),
+            use_edge_coeff=self.use_edge_coeff,
+            num_cons=constraint_features.shape[0],
+        )
 
         BD = self.model(
             constraint_features.to(self.device),

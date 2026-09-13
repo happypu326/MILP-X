@@ -13,10 +13,87 @@ MILP-X is a research framework designed to:
 ## Key Features
 
 - **16+ MILP Problem Types**: From graph problems (Max Cut, Independent Set) to combinatorial optimization (Bin Packing, Set Cover) and scheduling tasks
-- **5 Learning Methods**: Apollo, COCO, DiffILO, RoME, and PS Family
-- **Bipartite Graph Representation**: MILP instances represented as constraint-variable bipartite graphs
+- **Rich method library**: A broad set of GNN-based solution-prediction and search methods — Predict-and-Search, Apollo, CoCo-MILP, DiffILO, RoME, ConPaS, Neural Diving, discrete & guided diffusion, SHSP, and learned Large-Neighborhood Search
+- **Multiple bipartite GNN encoders**: Gasse half-convolution, edge-featured bipartite attention, random-feature, tripartite (objective node), and graph transformer
+- **Bipartite Graph Representation**: MILP instances represented as constraint-variable bipartite graphs with real edge coefficients $a_{ij}$
 - **Modular Architecture**: Extensible base classes for generators, trainers, and evaluators
 - **Commercial Solver Integration**: Benchmark against Gurobi and SCIP
+
+## Methods
+
+MILP-X represents each MILP instance as a **constraint-variable bipartite graph**:
+variable nodes on one side, constraint nodes on the other, and an edge for every
+nonzero coefficient. Edges carry the coefficient $a_{ij}$ (normalized per
+constraint, with its sign; `edge_nfeats: 2`). A structure-only variant (constant
+edge weight, `use_edge_coeff: false`, `edge_nfeats: 1`) is also available. The
+edge builder lives in `src/utils/utils.build_edge_features`.
+
+### GNN encoders
+
+Selected via `gnn_type`; all follow the bipartite half-convolution paradigm and
+consume the edge coefficient.
+
+| `gnn_type` | Description |
+|---|---|
+| `gcn` | Two-layer bipartite GCN (the default Predict-and-Search backbone) |
+| `gasse` | Deep bipartite half-convolution with jumping-knowledge |
+| `bipartite_attention` | Edge-coefficient-modulated per-constraint softmax attention (intra-constraint competition) |
+| `random_feature` | Half-convolution augmented with random node features for higher expressive power |
+| `tripartite` | Adds an explicit objective node with objective-coefficient edges |
+| `graph_transformer` | Local bipartite attention combined with a per-graph global-attention token |
+| `coco` | Intra-constraint competitive GNN layer (CoCo-MILP) |
+| `moe` | Mixture-of-experts encoder (RoME) |
+
+```bash
+python scripts/train/train_gnn.py gnn_type=bipartite_attention task=CA
+python scripts/train/train_gnn.py gnn_type=graph_transformer task=CA
+```
+
+### Solution-prediction methods
+
+Each method predicts a per-binary-variable score with a bipartite GNN; a solver
+then searches within a trust region around the prediction.
+
+| Method | Train | Test | Description |
+|---|---|---|---|
+| **Predict-and-Search (PS)** | `train_ps.py` | `test_ps.py` | Energy-weighted marginal prediction + trust-region search |
+| **Apollo** | `train_apollo.py` | `test_apollo.py` | Iterative prediction–correction with progressive fixing |
+| **CoCo-MILP** | `train_coco.py` | `test_coco.py` | Intra-constraint competitive GNN + inter-variable contrastive objective |
+| **ConPaS** | `train_conpas.py` | `test_ps.py` | Contrastive (InfoNCE) prediction over high- vs low-quality solutions |
+| **DiffILO** | `train_diffilo.py` | `test_diffilo.py` | Unsupervised, label-free differentiable objective + constraint penalty |
+| **RoME** | `train_rome.py` | `test_ps.py` | Robust multi-task (group-DRO) prediction with a mixture-of-experts encoder |
+| **Neural Diving** | `train_neural_diving.py` | `test_neural_diving.py` | SelectiveNet coverage gate + hard fixing of confident variables |
+| **Discrete Diffusion** | `train_diffusion.py` | `test_diffusion.py` | 2-state Bernoulli diffusion denoiser; reverse-sampled marginals feed the search |
+| **Constraint-Aware Diffusion** | `train_diffusion.py` | `test_diffusion.py` (`feasibility_projection: true`) | Discrete diffusion with a training-free feasibility projection during sampling |
+| **SHSP** | `train_shsp.py` | `test_shsp.py` | Hierarchical conditional decoding along a variable-coupling order + mask-and-repair |
+| **Guided Diffusion** | `train_guided_diffusion.py` | `test_guided_diffusion.py` | Latent diffusion over solution embeddings conditioned on the instance, with feasibility-guided sampling |
+
+```bash
+python scripts/train/train_conpas.py gnn_type=gasse task=MVC
+python scripts/train/train_neural_diving.py task=MVC target_coverage=0.6
+python scripts/train/train_diffusion.py task=MVC num_timesteps=200
+python scripts/train/train_shsp.py task=MVC
+python scripts/train/train_guided_diffusion.py task=MVC
+```
+
+### Search strategies
+
+The search stage that turns a prediction into a solution is configurable via
+`fix_strategy`:
+
+- `pas` — trust region (local-branching ball) around the predicted assignment;
+- `soft` — soft/confidence-threshold fixing;
+- `dive` — coverage-based hard fixing of the most confident variables.
+
+**Learned Large-Neighborhood Search** (`scripts/test/test_lns.py`) provides an
+iterative destroy-repair loop: starting from an incumbent, it repeatedly unfixes
+a subset of variables, re-optimizes the residual sub-MIP, and keeps the best
+solution. The neighborhood is chosen either at random (`lns_mode: random`) or
+guided by a trained predictor (`lns_mode: prediction`).
+
+```bash
+python scripts/test/test_lns.py lns_mode=prediction n_iters=5 destroy_frac=0.3
+```
 
 ## Project Structure
 
@@ -55,15 +132,16 @@ MILP-X/
 
 ### Required Dependencies
 
+Install everything with:
+
 ```bash
-pip install torch torchvision
-pip install torch-geometric
-pip install gurobipy          # Gurobi solver
-pip install pyscipopt          # SCIP solver
-pip install ecole              # MIP solving environments
-pip install omegaconf          # Configuration management
-pip install numpy pandas networkx
+pip install -r requirements.txt
 ```
+
+Core packages: `torch`, `torch-geometric`, `numpy`, `pandas`, `scipy`,
+`networkx`, `omegaconf`, `tqdm`, and at least one solver (`pyscipopt` for SCIP,
+`gurobipy` for Gurobi). Optional: `gurobi-logtools` (parsing Gurobi logs) and
+`ecole` (DiffILO data pipeline).
 
 ### Gurobi License
 
@@ -133,7 +211,7 @@ python tests/test_generate_mvc.py
 Convert raw MILP instances to graph representations for GNN training.
 
 ```bash
-python scripts/preprocess/preprocess_data.py
+python scripts/preprocess/ps_milp_to_graph.py
 ```
 
 ### 3. Train a Model
@@ -158,7 +236,7 @@ Evaluate the trained model on test instances.
 python scripts/test/test_apollo.py
 
 # Compare against commercial solvers
-python scripts/test/benchmark.py
+python scripts/test/test_solver.py
 ```
 
 ### 5. Single Instance Testing
@@ -166,8 +244,8 @@ python scripts/test/benchmark.py
 Test the model on individual instances for debugging or analysis.
 
 ```bash
-# Test on a single instance
-python scripts/test_single/test_apollo_single.py --instance_path path/to/instance.pkl
+# Test on a single instance (per-method scripts under scripts/test_single/)
+python scripts/test_single/test_ps.py
 ```
 
 ## Evaluation Metrics
@@ -178,6 +256,11 @@ The framework tracks:
 - **Solution Quality**: Objective values compared to optimal
 - **Branch-and-Bound Nodes**: Number of B&B nodes explored
 - **Optimality Gap**: Gap from known optimal solutions
+
+## License
+
+Released under the MIT License — see [LICENSE](LICENSE). Update the copyright
+holder in `LICENSE` to your name/organization before publishing.
 
 ## Citation
 

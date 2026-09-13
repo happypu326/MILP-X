@@ -3,7 +3,9 @@ import numpy as np
 import pandas as pd
 import gurobipy as gb
 from gurobipy import GRB
-import gurobi_logtools as glt
+# NOTE: `gurobi_logtools` is only needed to parse solver logs inside solve();
+# imported lazily there so merely importing this module (e.g. to build a model
+# or predict) does not require the optional dependency.
 
 from src.solver.base_solver import Solver
 import sys
@@ -72,6 +74,7 @@ class GurobiSolver(Solver):
 		self.model.Params.Threads = threads
 		self.model.optimize()
 		if log_file:
+			import gurobi_logtools as glt
 			self.logs = glt.parse(log_file).progress('nodelog')
 			self.logs['Means'] = pd.Series(np.repeat(means, len(self.logs)), index=self.logs.index)
 			self.logs['MpsPath'] = pd.Series(np.repeat(self.mps_path, len(self.logs)), index=self.logs.index)

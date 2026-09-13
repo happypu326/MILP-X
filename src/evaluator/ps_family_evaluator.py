@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from typing import List, Dict, Any, Optional, Tuple
 from .base_evaluator import BaseEvaluator
-from src.utils.utils import get_a_new2
+from src.utils.utils import get_a_new2, build_edge_features
 from src.solver.solver_utils import SOLVER_CLASSES
 
 class PSFamilyEvaluator(BaseEvaluator):
@@ -27,6 +27,12 @@ class PSFamilyEvaluator(BaseEvaluator):
         self.save_scores = config.get("save_scores", True)
         self.use_constraint_norm = config.get("use_constraint_norm", False)
         self.depth = config.get("depth", 1)
+        # Must match the setting used at training time. True -> edges carry
+        # [normalized a_ij, sign(a_ij)] (edge_nfeats=2); False -> legacy edge=1.
+        self.use_edge_coeff = config.get("use_edge_coeff", True)
+        # Neural-Diving-style coverage hard-fixing (fix_strategy='dive').
+        self.coverage = config.get("coverage", 0.5)
+        self.dive_delta = config.get("dive_delta", 0)
 
         self.hyperparam_pas = config.get("hyperparam_pas", {
             "IP": (60, 30, 70), "MIS": (600, 600, 100), "WA": (20, 200, 100),
@@ -56,11 +62,15 @@ class PSFamilyEvaluator(BaseEvaluator):
 
         variable_features = v_nodes
         edge_indices = A._indices()
-        edge_features = A._values().unsqueeze(1)
-        edge_features = torch.ones(edge_features.shape)
+        edge_features = build_edge_features(
+            edge_indices,
+            A._values(),
+            use_edge_coeff=self.use_edge_coeff,
+            num_cons=constraint_features.shape[0],
+        )
         batch_indices = torch.zeros(v_nodes.shape[0], dtype=torch.long)
 
-        if self.gnn_type == 'gcn':
+        if self.gnn_type in ('gcn', 'gasse', 'bipartite_attention', 'random_feature', 'tripartite', 'graph_transformer'):
             BD = self.model(
                 constraint_features.to(self.device),
                 edge_indices.to(self.device),
@@ -68,6 +78,8 @@ class PSFamilyEvaluator(BaseEvaluator):
                 variable_features.to(self.device),
                 batch_indices.to(self.device),
             )
+            if isinstance(BD, tuple):
+                BD = BD[0]
             BD = BD.sigmoid().cpu().squeeze()
         elif self.gnn_type == 'moe':
             BD, _ = self.model(
@@ -155,6 +167,30 @@ class PSFamilyEvaluator(BaseEvaluator):
 
         return scores, tot_fix * alpha
 
+    def _fix_dive(self, scores: List[list], task: str) -> Tuple[List[list], float]:
+        """
+        Neural-Diving-style coverage fixing: fix the most 'reliable' fraction of
+        binary variables to their rounded prediction and leave the rest free.
+
+        Reliability priority is a learned selection gate if present (scores[i][5],
+        set by NeuralDivingEvaluator) else prediction confidence |p - 0.5|.
+        delta = self.dive_delta (0 -> hard fixing, >0 -> soft trust region on the
+        fixed set).
+        """
+        N = len(scores)
+        n_fix = min(N, int(round(self.coverage * N)))
+
+        def priority(s):
+            return s[5] if len(s) > 5 else abs(s[2] - 0.5)
+
+        order = sorted(range(N), key=lambda i: priority(scores[i]), reverse=True)
+        for rank, i in enumerate(order):
+            if rank < n_fix:
+                scores[i][3] = 1 if scores[i][2] >= 0.5 else 0
+            else:
+                scores[i][3] = -1
+        return scores, float(self.dive_delta)
+
     def _solve_with_trust_region(
         self, ins_path: str, scores: List[list], delta: float, log_path: str
     ) -> Dict[str, Any]:
@@ -227,6 +263,8 @@ class PSFamilyEvaluator(BaseEvaluator):
                 t1 = time.time()
                 if self.fix_strategy == 'pas':
                     scores, delta = self._fix_pas(scores, task)
+                elif self.fix_strategy == 'dive':
+                    scores, delta = self._fix_dive(scores, task)
                 else:
                     scores, delta = self._fix_soft_confidence(scores, task)
                 fix_time = time.time() - t1

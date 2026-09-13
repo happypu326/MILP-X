@@ -1,0 +1,38 @@
+# Basic settings
+method_type: GuidedDiffusion
+task: MVC
+difficulty: hard
+gurobi_time: "3600s"
+solver_settings: gurobi
+device: cuda:0
+seed: 0
+
+# Data
+data_dir: ./dataset
+batch_size: 1
+num_workers: 0
+train_split: 0.7
+
+use_edge_coeff: true
+edge_nfeats: 2
+
+# Model
+emb_size: 64
+latent_dim: 64
+constraint_nfeats: 4
+variable_nfeats: 6
+
+# Latent diffusion + joint-loss weights
+num_timesteps: 200
+lambda_recon: 1.0
+lambda_align: 0.1
+
+# Training
+lr: 0.0001
+num_epochs: 2000
+patience: 100
+min_delta: 1.0e-5
+
+model_save_dir: ./pretrain_models
+log_save_dir: ./train_logs
+save_top_k: 3

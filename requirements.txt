@@ -1,0 +1,17 @@
+# Core dependencies
+torch>=1.12
+torch-geometric>=2.2
+numpy
+pandas
+scipy
+networkx
+omegaconf
+tqdm
+
+# Solvers (at least one required)
+pyscipopt        # SCIP (open source)
+gurobipy         # Gurobi (commercial; free academic license)
+
+# Optional
+# gurobi-logtools  # only needed to parse Gurobi logs during solve() with a log file
+# ecole            # only needed for the DiffILO data pipeline (get_diffilo_data_*)

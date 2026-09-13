@@ -71,11 +71,11 @@ class GNNEncoder(torch.nn.Module):
             torch.nn.ReLU(),
         )
 
-        self.conv_v_to_c = BipartiteGraphConvolution(self.emb_size)
-        self.conv_c_to_v = BipartiteGraphConvolution(self.emb_size)
+        self.conv_v_to_c = BipartiteGraphConvolution(self.emb_size, edge_nfeats=self.edge_nfeats)
+        self.conv_c_to_v = BipartiteGraphConvolution(self.emb_size, edge_nfeats=self.edge_nfeats)
 
-        self.conv_v_to_c2 = BipartiteGraphConvolution(self.emb_size)
-        self.conv_c_to_v2 = BipartiteGraphConvolution(self.emb_size)
+        self.conv_v_to_c2 = BipartiteGraphConvolution(self.emb_size, edge_nfeats=self.edge_nfeats)
+        self.conv_c_to_v2 = BipartiteGraphConvolution(self.emb_size, edge_nfeats=self.edge_nfeats)
 
     def forward(
         self,
@@ -130,15 +130,16 @@ class BipartiteGraphConvolution(torch_geometric.nn.MessagePassing):
     to provide the exact form of the messages being passed.
     """
 
-    def __init__(self, emb_size=64):
+    def __init__(self, emb_size=64, edge_nfeats=1):
         super().__init__("add")
         self.emb_size = emb_size
+        self.edge_nfeats = edge_nfeats
 
         self.feature_module_left = torch.nn.Sequential(
             torch.nn.Linear(self.emb_size, self.emb_size)
         )
         self.feature_module_edge = torch.nn.Sequential(
-            torch.nn.Linear(1, self.emb_size, bias=False)
+            torch.nn.Linear(self.edge_nfeats, self.emb_size, bias=False)
         )
         self.feature_module_right = torch.nn.Sequential(
             torch.nn.Linear(self.emb_size, self.emb_size, bias=False)

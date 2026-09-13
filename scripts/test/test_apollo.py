@@ -48,6 +48,7 @@ def build_eval_config(cfg_dict, device, worker_id, worker_log_root, worker_resul
         'mip_focus': cfg_dict["mip_focus"],
         'time_flag': cfg_dict.get("time_flag", None),
         'problem': cfg_dict.get("problem", cfg_dict["test_problem_type"]),
+        'use_edge_coeff': cfg_dict.get("use_edge_coeff", True),
         'test_num': chunk_size,
     }
 

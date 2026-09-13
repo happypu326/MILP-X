@@ -3,17 +3,22 @@ import os
 import torch
 import torch_geometric
 import numpy as np
-    
+from src.utils.utils import build_edge_features
+
 class GraphDataset(torch_geometric.data.Dataset):
     """
     This class encodes a collection of graphs, as well as a method to load such graphs from the disk.
     It can be used in turn by the data loaders provided by pytorch geometric.
     """
 
-    def __init__(self, sample_files, method_type):
+    def __init__(self, sample_files, method_type, use_edge_coeff=True):
         super().__init__(root=None, transform=None, pre_transform=None)
         self.sample_files = sample_files
         self.method_type = method_type
+        # When True, edges carry [normalized a_ij, sign(a_ij)] (edge_nfeats=2).
+        # When False, reproduce the original PS behaviour: every edge = 1
+        # (edge_nfeats=1). See src.utils.utils.build_edge_features.
+        self.use_edge_coeff = use_edge_coeff
 
     def len(self):
         return len(self.sample_files)
@@ -79,9 +84,16 @@ class GraphDataset(torch_geometric.data.Dataset):
             edge_indices = A._indices()
 
             variable_features = v_nodes
-            edge_features =A._values().unsqueeze(1)
-            edge_features=torch.ones(edge_features.shape)
-            
+            # Edge features: real coefficient a_ij (normalized per-constraint +
+            # sign) when use_edge_coeff, else the legacy constant-1 edge.
+            edge_values = A._values()
+            edge_features = build_edge_features(
+                edge_indices,
+                edge_values,
+                use_edge_coeff=self.use_edge_coeff,
+                num_cons=constraint_features.shape[0],
+            )
+
             constraint_features[torch.isnan(constraint_features)] = 1
 
             graph = BipartiteNodeData(

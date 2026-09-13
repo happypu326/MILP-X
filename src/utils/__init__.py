@@ -1,4 +1,4 @@
-from .constants import TASKS, PROBLEM_CLASS, GROUP_CLASS, ENERGY_WEIGHT_NORM
+from .utils import TASKS, PROBLEM_CLASS, GROUP_CLASS, ENERGY_WEIGHT_NORM
 from .helpers import set_random_seed, get_device
 
 __all__ = [

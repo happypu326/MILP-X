@@ -12,7 +12,8 @@ instance_dir: ./data/test
 gnn_type: gcn
 emb_size: 64
 constraint_nfeats: 4
-edge_nfeats: 1
+use_edge_coeff: true
+edge_nfeats: 2
 variable_nfeats: 6
 
 # Testing configuration
