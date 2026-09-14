@@ -1,0 +1,43 @@
+# Constraint Matters evaluation: variable trust region + soft constraint tightening.
+method_type: CTC
+test_problem_type: CA
+difficulty: easy
+
+device: cuda:0
+seed: 0
+instance_dir: ./data/test
+
+emb_size: 64
+constraint_nfeats: 4
+use_edge_coeff: true
+edge_nfeats: 2
+variable_nfeats: 6
+
+# variable trust-region fixing (Predict-and-Search)
+fix_strategy: pas
+hyperparam_pas:
+  CA: [150, 0, 25]
+  MVC: [40, 0, 30]
+  MIS: [600, 600, 100]
+  SC: [300, 0, 100]
+hyperparam_soft:
+  CA: [0.99, 0.12]
+  MVC: [0.97, 0.02]
+  MIS: [0.95, 0.05]
+
+# constraint reduction
+kc: 50                 # #top predicted critical constraints to soft-tighten
+ctc_delta: 5           # relaxation budget Delta_c (how many tightened may relax)
+ctc_threshold: 0.5     # only tighten constraints with criticality prob above this
+
+solver: gurobi
+time_limits: 1000
+threads: 1
+num_workers: 20
+
+time_flag: "ctc0"
+model_path: ./pretrain_models/${method_type}/${test_problem_type}/${time_flag}_ctc_model_best.pth
+log_dir: ./test_logs/${method_type}/${solver}/${test_problem_type}/${difficulty}/${time_limits}s/${time_flag}/
+result_dir: ./test_results/${method_type}/${solver}/${test_problem_type}/${difficulty}/${time_limits}s/${time_flag}/
+scores_dir: ./scores/${method_type}/${solver}/${test_problem_type}/${difficulty}/${time_limits}s/${time_flag}/
+save_scores: True

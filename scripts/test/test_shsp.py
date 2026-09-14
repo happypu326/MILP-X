@@ -18,7 +18,7 @@ def build_model(cfg_dict, device):
         depth=cfg_dict.get("depth", 4), jumping_knowledge=cfg_dict.get("jumping_knowledge", True),
     ).to(device)
     if not os.path.exists(cfg_dict["model_path"]):
-        raise FileNotFoundError(f"模型文件未找到: {cfg_dict['model_path']}")
+        raise FileNotFoundError(f"Model file not found: {cfg_dict['model_path']}")
     model.load_state_dict(torch.load(cfg_dict["model_path"], map_location=device), strict=False)
     model.eval()
     return model

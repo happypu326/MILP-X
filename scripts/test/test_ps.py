@@ -8,25 +8,48 @@ sys.path.insert(0, PROJECT_ROOT)
 import torch
 from omegaconf import OmegaConf
 
-from src.learning import GNNPolicy
+from src.learning import build_ps_family_model, select_encoder_kwargs
 from src.evaluator.ps_family_evaluator import PSFamilyEvaluator
 from src.utils.utils import collect_test_instances
 from src.utils.parallel_runner import run_parallel_eval, merge_basic_metrics
 
 
 def build_model(cfg_dict, device):
-    model = GNNPolicy(
+    # Dispatch on gnn_type so any PS-family encoder (gcn / gasse / rwse /
+    # substructure / bipartite_gin / ...) can be evaluated. The encoder kwargs
+    # come from the SAME selector used at training time, so the checkpoint
+    # architecture matches.
+    gnn_type = cfg_dict.get("gnn_type", "gcn")
+    model = build_ps_family_model(
+        gnn_type,
         emb_size=cfg_dict["emb_size"],
         constraint_nfeats=cfg_dict["constraint_nfeats"],
         edge_nfeats=cfg_dict["edge_nfeats"],
-        variable_nfeats=cfg_dict["variable_nfeats"]
+        variable_nfeats=cfg_dict["variable_nfeats"],
+        **select_encoder_kwargs(gnn_type, cfg_dict),
     ).to(device)
 
     if not os.path.exists(cfg_dict["model_path"]):
-        raise FileNotFoundError(f"模型文件未找到: {cfg_dict['model_path']}")
+        raise FileNotFoundError(f"Model file not found: {cfg_dict['model_path']}")
 
     state_dict = torch.load(cfg_dict["model_path"], map_location=device)
-    model.load_state_dict(state_dict, strict=False)
+    # strict=False tolerates benign buffer differences (e.g. GINE eps), but a
+    # gnn_type / hyper-parameter mismatch would otherwise load garbage silently.
+    # Surface any non-trivial key mismatch so a wrong checkpoint is caught.
+    incompatible = model.load_state_dict(state_dict, strict=False)
+    missing = list(getattr(incompatible, "missing_keys", []))
+    unexpected = list(getattr(incompatible, "unexpected_keys", []))
+    if missing or unexpected:
+        n_params = sum(1 for _ in model.state_dict())
+        if len(missing) > 0.2 * n_params or len(unexpected) > 0.2 * n_params:
+            raise RuntimeError(
+                f"Checkpoint mismatch for gnn_type='{gnn_type}': "
+                f"{len(missing)} missing / {len(unexpected)} unexpected keys "
+                f"(of {n_params}). Does the checkpoint match gnn_type and its "
+                f"encoder hyper-parameters (depth / walk_length / ...)?"
+            )
+        print(f"[test_ps] load_state_dict: {len(missing)} missing, "
+              f"{len(unexpected)} unexpected keys (tolerated).")
     model.eval()
     return model
 

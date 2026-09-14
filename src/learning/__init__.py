@@ -7,8 +7,16 @@ from .model.bipartite_encoders import (
     RandomFeatureGNNPolicy,
     TripartiteGNNPolicy,
     GraphTransformerPolicy,
+    BipartiteGINPolicy,
+    RWSEGNNPolicy,
+    SubstructureGNNPolicy,
+    GraphGPSPolicy,
+    LapPEGNNPolicy,
+    IDGNNPolicy,
+    EdgeBipartiteGNNPolicy,
     build_gnn,
     build_ps_family_model,
+    select_encoder_kwargs,
     GNN_REGISTRY,
     PS_FAMILY_GNN_TYPES,
 )
@@ -17,6 +25,9 @@ from .loss.coco_loss import CoCoLossComputer
 __all__ = [
     'GNNPolicy', 'MoEPolicy', 'CoCoLossComputer', 'CoCoGNNPolicy',
     'GasseGNNPolicy', 'BipartiteAttentionPolicy', 'RandomFeatureGNNPolicy',
-    'TripartiteGNNPolicy', 'GraphTransformerPolicy', 'build_gnn',
-    'build_ps_family_model', 'GNN_REGISTRY', 'PS_FAMILY_GNN_TYPES',
+    'TripartiteGNNPolicy', 'GraphTransformerPolicy',
+    'BipartiteGINPolicy', 'RWSEGNNPolicy', 'SubstructureGNNPolicy',
+    'GraphGPSPolicy', 'LapPEGNNPolicy', 'IDGNNPolicy', 'EdgeBipartiteGNNPolicy',
+    'build_gnn', 'build_ps_family_model', 'select_encoder_kwargs',
+    'GNN_REGISTRY', 'PS_FAMILY_GNN_TYPES',
 ]

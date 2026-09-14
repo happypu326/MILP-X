@@ -31,7 +31,7 @@ def main():
     ).to(device)
 
     if not os.path.exists(cfg.model_path):
-        raise FileNotFoundError(f"模型文件未找到: {cfg.model_path}")
+        raise FileNotFoundError(f"Model file not found: {cfg.model_path}")
     state_dict = torch.load(cfg.model_path, map_location=device)
     model.load_state_dict(state_dict, strict=False)
     model.eval()

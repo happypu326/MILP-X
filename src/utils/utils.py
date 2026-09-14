@@ -111,7 +111,6 @@ def get_BG_from_scip(ins_name):
         tp=[0]*ori_start
         tp[3]=0
         tp[4]=1e+20
-        #tp=[0,0,0,0,0]
         if mvars[i].vtype()=='BINARY':
             tp[ori_start-1]=1
             b_vars.append(i)
@@ -135,14 +134,12 @@ def get_BG_from_scip(ins_name):
         obj_node[0]+=v
         obj_node[1]+=1
     obj_node[0]/=obj_node[1]
-    #quit()
        
     cons=m.getConss()
     new_cons=[]
     for cind,c in enumerate(cons):
         coeff=m.getValsLinear(c)
         if len(coeff)==0:
-            #print(coeff,c)
             continue
         new_cons.append(c)
     cons=new_cons
@@ -179,11 +176,8 @@ def get_BG_from_scip(ins_name):
             A[cind][-1]+=1
             v_nodes[v_indx][2]+=1
             v_nodes[v_indx][1]+=coeff[k]/lcons
-            if v_indx==1066:
-                print(coeff[k],lcons)
             v_nodes[v_indx][3]=max(v_nodes[v_indx][3],coeff[k])
             v_nodes[v_indx][4]=min(v_nodes[v_indx][4],coeff[k])
-            #v_nodes[v_indx][3]+=cind*coeff[k]
             summation+=coeff[k]
         llc=max(len(coeff),1)
         c_nodes.append([summation/llc,llc,rhs,sense])
@@ -242,7 +236,6 @@ def get_BG_from_GRB(ins_name):
         tp=[0]*ori_start
         tp[3]=0
         tp[4]=1e+20
-        #tp=[0,0,0,0,0]
         if mvars[i].VType=='B':
             tp[ori_start-1]=1
             b_vars.append(i)
@@ -341,7 +334,6 @@ def get_BG_from_GRB(ins_name):
     v_nodes=v_nodes-mins
     v_nodes=v_nodes/diff
     v_nodes=torch.clamp(v_nodes,1e-5,1)
-    #v_nodes=position_get_ordered(v_nodes)
     v_nodes=position_get_ordered_flt(v_nodes)
     
     maxs=torch.max(c_nodes,0)[0]
@@ -489,7 +481,6 @@ def get_a_new2(ins_name):
         tp = [0] * ori_start
         tp[3] = 0
         tp[4] = 1e+20
-        # tp=[0,0,0,0,0]
         if mvars[i].vtype() == 'BINARY':
             tp[ori_start - 1] = 1
             b_vars.append(i)
@@ -531,7 +522,6 @@ def get_a_new2(ins_name):
     for cind, c in enumerate(cons):
         coeff = m.getValsLinear(c)
         if len(coeff) == 0:
-            # print(coeff,c)
             continue
         new_cons.append(c)
     cons = new_cons

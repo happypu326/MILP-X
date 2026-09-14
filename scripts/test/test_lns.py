@@ -12,14 +12,15 @@ from src.utils.parallel_runner import run_parallel_eval, merge_basic_metrics
 
 
 def build_model(cfg_dict, device):
-    # Predictor used only by lns_mode=prediction. For random mode (or when no
-    # checkpoint is available) an untrained encoder is returned and never used.
+    # Predictor used by lns_mode in {prediction, cllns}. For random mode (or when
+    # no checkpoint is available) an untrained encoder is returned and never used.
     model = build_ps_family_model(
         cfg_dict["gnn_type"], emb_size=cfg_dict["emb_size"],
         constraint_nfeats=cfg_dict["constraint_nfeats"],
         edge_nfeats=cfg_dict["edge_nfeats"], variable_nfeats=cfg_dict["variable_nfeats"],
     ).to(device)
-    if cfg_dict.get("lns_mode", "prediction") == "prediction" and os.path.exists(cfg_dict["model_path"]):
+    if cfg_dict.get("lns_mode", "prediction") in ("prediction", "cllns") \
+            and os.path.exists(cfg_dict["model_path"]):
         model.load_state_dict(torch.load(cfg_dict["model_path"], map_location=device), strict=False)
     model.eval()
     return model
@@ -36,6 +37,10 @@ def build_eval_config(cfg_dict, device, worker_id, worker_log_root, worker_resul
         'iter_time': cfg_dict["iter_time"], 'maximize': cfg_dict.get("maximize", False),
         'threads': cfg_dict["threads"], 'problem': cfg_dict["test_problem_type"],
         'seed': cfg_dict.get("seed", 0) + worker_id, 'test_num': chunk_size,
+        # CL-LNS destroy-policy options (used only by lns_mode=cllns)
+        'window': cfg_dict.get("window", 3),
+        'adaptive_gamma': cfg_dict.get("adaptive_gamma", 1.02),
+        'adaptive_beta': cfg_dict.get("adaptive_beta", 0.5),
     }
 
 

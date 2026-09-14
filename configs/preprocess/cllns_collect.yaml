@@ -1,0 +1,19 @@
+# CL-LNS data collection with a Local-Branching expert. Produces per-state
+# pickles (bipartite graph + incumbent window + positive/negative destroy actions).
+task: MVC
+mode: train
+difficulty: easy
+solver: gurobi
+
+# collection budget (scale up for real training)
+n_states: 3           # LNS states harvested per instance
+k_frac: 0.2           # Local-Branching Hamming radius = k_frac * #binaries
+window: 3             # incumbent-history window appended to variable features
+init_time: 10         # initial incumbent solve (s)
+lb_time: 10           # per Local-Branching sub-ILP (s)
+n_neg: 8              # negative destroy actions per state
+threads: 1
+seed: 0
+
+data_dir: ./data/${mode}/${task}/${difficulty}
+output_dir: ./dataset/cllns/${task}/${difficulty}/

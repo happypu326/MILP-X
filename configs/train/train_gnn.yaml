@@ -18,8 +18,17 @@ train_split: 0.7
 use_edge_coeff: true
 edge_nfeats: 2
 
-# Model: pick a bipartite-tailored encoder.
-#   gasse | bipartite_attention | random_feature | tripartite | gcn
+# Model: pick a bipartite GNN encoder.
+#   gcn | gasse | bipartite_attention | random_feature | tripartite
+#   | graph_transformer | bipartite_gin | rwse | substructure
+#   | graphgps | lap_pe | id_gnn | edge_gnn
+#   bipartite_gin  -- bipartite GINE (injective sum aggregation)
+#   rwse           -- random-walk structural encoding
+#   substructure   -- bipartite closed-walk / butterfly-count features
+#   graphgps       -- local half-conv + global attention + random-walk encoding
+#   lap_pe         -- Laplacian spectral positional encoding
+#   id_gnn         -- identity-aware GNN (per-root tagging; O(roots) cost)
+#   edge_gnn       -- edge-updating GNN (per-edge state for a_ij)
 gnn_type: gasse
 emb_size: 64
 constraint_nfeats: 4
@@ -28,9 +37,14 @@ variable_nfeats: 6
 # Encoder hyper-parameters (only the relevant ones are used per gnn_type)
 depth: 4
 jumping_knowledge: true
-heads: 4               # bipartite_attention
-dropout: 0.0          # bipartite_attention
+heads: 4               # bipartite_attention / graph_transformer / graphgps
+dropout: 0.0          # bipartite_attention / graph_transformer / graphgps
 n_rand: 8             # random_feature
+walk_length: 8        # rwse / graphgps: number of random-walk steps in the structural encoding
+struct_powers: [4, 6] # substructure: adjacency powers for the closed-walk counts
+train_eps: true       # bipartite_gin: learnable (1+eps) GINE self-term
+pe_dim: 8             # lap_pe: number of Laplacian eigenvectors/eigenvalues
+max_roots: 32         # id_gnn: max #roots given the identity treatment (>= n_var for full power)
 
 # Training
 lr: 0.00001

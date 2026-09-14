@@ -4,7 +4,7 @@ Generic training script for the bipartite-tailored PS-family encoders
 
 Uses the standard Predict-and-Search objective (energy-weighted BCE toward the
 collected solution marginals) via PS_Family_Trainer + BCELossComputer, so any
-of these encoders can be benchmarked against the shipped GNNPolicy under an
+of these encoders can be benchmarked against the default GNNPolicy under an
 identical training/eval protocol.
 
 Usage:
@@ -23,24 +23,15 @@ from omegaconf import OmegaConf
 from datetime import datetime
 
 from src.dataloader import create_dataloaders
-from src.learning import build_ps_family_model
+from src.learning import build_ps_family_model, select_encoder_kwargs
 from src.trainer import PS_Family_Trainer
 from src.learning.loss.bce_loss import BCELossComputer
 
 
 def _encoder_kwargs(cfg):
-    """Collect the hyper-parameters relevant to the chosen encoder."""
-    kw = {}
-    gt = cfg.gnn_type
-    if gt in ('gasse', 'bipartite_attention', 'random_feature', 'tripartite', 'graph_transformer'):
-        kw['depth'] = cfg.get('depth', 4)
-        kw['jumping_knowledge'] = cfg.get('jumping_knowledge', True)
-    if gt in ('bipartite_attention', 'graph_transformer'):
-        kw['heads'] = cfg.get('heads', 4)
-        kw['dropout'] = cfg.get('dropout', 0.0)
-    if gt == 'random_feature':
-        kw['n_rand'] = cfg.get('n_rand', 8)
-    return kw
+    """Constructor kwargs for the chosen encoder (shared with test_ps.py so a
+    checkpoint always reloads)."""
+    return select_encoder_kwargs(cfg.gnn_type, cfg)
 
 
 def main():

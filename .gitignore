@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Caches / tooling
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
+
+# Data & instances (generated / large)
+dataset/
+data/
+*.lp
+*.mps
+*.bg
+*.sol
+
+# Training / evaluation artifacts
+pretrain_models/
+train_logs/
+test_logs/
+test_results/
+scores/
+*.pth
+*.log
+
+# Solver license
+gurobi.lic

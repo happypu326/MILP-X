@@ -1,0 +1,56 @@
+# EnCore evaluation: probe -> consistency prediction -> value-conditioned
+# trust-region search. Mirrors test_ps.yaml; variable_nfeats=7 (early value).
+method_type: EnCore
+test_problem_type: MVC
+difficulty: easy
+
+device: cuda:0
+seed: 0
+
+instance_dir: ./data/test
+
+# Model
+gnn_type: gasse
+emb_size: 64
+constraint_nfeats: 4
+use_edge_coeff: true
+edge_nfeats: 2
+variable_nfeats: 7
+depth: 4
+jumping_knowledge: true
+
+# EnCore probing
+probe_time: 20        # short probing solve budget (charged against time_limits)
+encore_k: 3           # ensemble over up to K early solutions
+
+# Search
+fix_strategy: pas
+hyperparam_pas:
+  IP: [60, 30, 70]
+  MIS: [600, 600, 100]
+  CA: [150, 0, 25]
+  SC: [300, 0, 100]
+  MVC: [40, 0, 30]
+  BP: [100, 0, 50]
+  CFLP: [30, 0, 30]
+  GISP: [1000, 100, 120]
+hyperparam_soft:
+  CA: [0.99, 0.12]
+  IP: [0.93, 0.01]
+  SC: [0.96, 0.02]
+  MIS: [0.95, 0.05]
+  MVC: [0.97, 0.02]
+
+# Solver
+solver: gurobi
+time_limits: 1000
+threads: 1
+num_workers: 20
+
+# Paths
+time_flag: "encore0"
+model_path: ./pretrain_models/${method_type}/${test_problem_type}/${time_flag}_${gnn_type}_model_best.pth
+log_dir: ./test_logs/${method_type}/${solver}/${test_problem_type}/${difficulty}/${time_limits}s/${time_flag}/
+result_dir: ./test_results/${method_type}/${solver}/${test_problem_type}/${difficulty}/${time_limits}s/${time_flag}/
+scores_dir: ./scores/${method_type}/${solver}/${test_problem_type}/${difficulty}/${time_limits}s/${time_flag}/
+save_scores: True

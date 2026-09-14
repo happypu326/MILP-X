@@ -1,0 +1,24 @@
+# EnCore data preprocessing: full-budget solutions + a short probing solve for
+# early solutions. Writes BG/ and solutions/ (with an extra `early_sols` field).
+
+# Task
+task: CA
+mode: train
+difficulty: easy
+
+# Solver
+solver: gurobi
+max_time: 100         # full-budget solve (for X* and the solution pool)
+max_solutions: 500
+
+# Probing (early solution X_ES)
+probe_time: 20        # short probing budget
+probe_top_k: 3        # keep up to K best early incumbents for inference ensembling
+
+# Parallel
+workers: 8
+threads: 1
+
+# Paths
+data_dir: ./data/${mode}/${task}/${difficulty}
+output_dir: ./dataset/${mode}/${solver}/${task}/${difficulty}/${max_time}s/

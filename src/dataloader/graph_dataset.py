@@ -73,9 +73,15 @@ class GraphDataset(torch_geometric.data.Dataset):
             graph.A = Tensors[0]
             graph.b = Tensors[1]
             graph.c = Tensors[2]
-            
+
             return graph
-        else:    
+        elif self.method_type == 'EnCore':
+            return self._get_encore(index)
+        elif self.method_type == 'CTC':
+            return self._get_ctc(index)
+        elif self.method_type == 'CLLNS':
+            return self._get_cllns(index)
+        else:
             BG, sols, objs, varNames, group = self.process_sample(self.sample_files[index])
 
             A, v_map, v_nodes, c_nodes, b_vars=BG
@@ -127,6 +133,152 @@ class GraphDataset(torch_geometric.data.Dataset):
             graph.group = group
 
             return graph
+
+    def _get_encore(self, index):
+        """EnCore sample: bipartite graph + the early solution x_ES appended as a
+        7th variable feature, and per-variable early-to-final consistency labels
+        y_i = 1[round(x*_i) == round(x_ES_i)] (x* = best full-budget solution)."""
+        BGFilepath, solFilePath, group = self.sample_files[index]
+        with open(BGFilepath, "rb") as f:
+            BG = pickle.load(f)
+        with open(solFilePath, "rb") as f:
+            solData = pickle.load(f)
+
+        A, v_map, v_nodes, c_nodes, b_vars = BG
+        varNames = solData['var_names']
+        sols = np.round(solData['sols'][:50], 0)
+        early_sols = solData.get('early_sols', [])
+
+        varname_dict = {n: i for i, n in enumerate(varNames)}
+        varname_map = [varname_dict[n] for n in v_map]        # graph idx -> var_names idx
+        vm = np.array(varname_map)
+
+        n_var = len(v_map)
+        x_star = sols[0][vm] if len(sols) > 0 else np.zeros(n_var, dtype=np.float32)
+        if len(early_sols) > 0:
+            # train on a randomly chosen early solution, matching the inference-time
+            # ensemble over the K probe incumbents (avoids over-fitting to only the best)
+            xk = np.asarray(early_sols[np.random.randint(len(early_sols))])
+            x_es = np.round(xk)[vm]
+        elif len(sols) > 1:
+            # no probe incumbent: use the worst pooled solution as a proxy early
+            # incumbent. NOT x_star -- feeding the final solution would leak the
+            # target and make every consistency label 1.
+            x_es = np.round(sols[-1])[vm]
+        else:
+            x_es = x_star.copy()          # single solution only: degenerate fallback
+        consistency = (np.round(x_star) == np.round(x_es)).astype(np.float32)
+
+        constraint_features = c_nodes
+        constraint_features[torch.isnan(constraint_features)] = 1
+        edge_indices = A._indices()
+        edge_features = build_edge_features(
+            edge_indices, A._values(), use_edge_coeff=self.use_edge_coeff,
+            num_cons=constraint_features.shape[0])
+
+        variable_features = v_nodes.cpu()
+        early_col = torch.FloatTensor(x_es).reshape(-1, 1)
+        variable_features = torch.cat([variable_features, early_col], dim=1)  # [n_var, 7]
+
+        graph = BipartiteNodeData(
+            torch.FloatTensor(constraint_features.cpu()),
+            torch.LongTensor(edge_indices.cpu()),
+            torch.FloatTensor(edge_features.cpu()),
+            variable_features,
+        )
+        graph.num_nodes = constraint_features.shape[0] + variable_features.shape[0]
+        graph.consistency_labels = torch.FloatTensor(consistency)
+        graph.nsols = 1
+        graph.ntvars = variable_features.shape[0]
+        graph.ntcons = constraint_features.shape[0]
+        graph.varNames = varNames
+        graph.varInds = [[torch.tensor(varname_map)], [b_vars]]
+        graph.group = group
+        return graph
+
+    def _get_ctc(self, index):
+        """Constraint Matters sample: bipartite graph + per-variable assignment
+        labels (best solution) + per-constraint critical-tight-constraint labels
+        (aligned to constraint nodes; the appended objective node gets label 0)."""
+        BGFilepath, solFilePath, group = self.sample_files[index]
+        with open(BGFilepath, "rb") as f:
+            BG = pickle.load(f)
+        with open(solFilePath, "rb") as f:
+            solData = pickle.load(f)
+
+        A, v_map, v_nodes, c_nodes, b_vars = BG
+        varNames = solData['var_names']
+        sols = np.round(solData['sols'][:50], 0)
+        ctc = np.asarray(solData.get('ctc_labels', []), dtype=np.float32)
+
+        varname_dict = {n: i for i, n in enumerate(varNames)}
+        varname_map = [varname_dict[n] for n in v_map]
+        vm = np.array(varname_map)
+        n_var = len(v_map)
+        x_star = sols[0][vm] if len(sols) > 0 else np.zeros(n_var, dtype=np.float32)
+
+        constraint_features = c_nodes
+        constraint_features[torch.isnan(constraint_features)] = 1
+        ncons_total = constraint_features.shape[0]           # #real constraints + objective node
+        ctc_full = np.zeros(ncons_total, dtype=np.float32)   # objective node (last row) stays 0
+        m = min(len(ctc), ncons_total - 1)
+        ctc_full[:m] = ctc[:m]
+
+        edge_indices = A._indices()
+        edge_features = build_edge_features(
+            edge_indices, A._values(), use_edge_coeff=self.use_edge_coeff,
+            num_cons=ncons_total)
+
+        graph = BipartiteNodeData(
+            torch.FloatTensor(constraint_features.cpu()),
+            torch.LongTensor(edge_indices.cpu()),
+            torch.FloatTensor(edge_features.cpu()),
+            torch.FloatTensor(v_nodes.cpu()),
+        )
+        graph.num_nodes = ncons_total + n_var
+        graph.var_labels = torch.FloatTensor(x_star)
+        graph.ctc_labels = torch.FloatTensor(ctc_full)
+        graph.nsols = 1
+        graph.ntvars = n_var
+        graph.ntcons = ncons_total
+        graph.varNames = varNames
+        graph.varInds = [[torch.tensor(varname_map)], [b_vars]]
+        graph.group = group
+        return graph
+
+    def _get_cllns(self, index):
+        """CL-LNS state: bipartite graph with a W-step incumbent-value history
+        appended to the variable features, plus positive / negative destroy
+        actions over the binary variables. Use with batch_size=1."""
+        path = self.sample_files[index]
+        with open(path, "rb") as f:
+            st = pickle.load(f)
+
+        A, v_map, v_nodes, c_nodes, b_vars = st['bg']
+        window = torch.FloatTensor(np.asarray(st['window'], dtype=np.float32))   # [n_var, W]
+
+        constraint_features = c_nodes
+        constraint_features[torch.isnan(constraint_features)] = 1
+        edge_indices = A._indices()
+        edge_features = build_edge_features(
+            edge_indices, A._values(), use_edge_coeff=self.use_edge_coeff,
+            num_cons=constraint_features.shape[0])
+        variable_features = torch.cat([v_nodes.cpu(), window], dim=1)            # [n_var, 6+W]
+
+        graph = BipartiteNodeData(
+            torch.FloatTensor(constraint_features.cpu()),
+            torch.LongTensor(edge_indices.cpu()),
+            torch.FloatTensor(edge_features.cpu()),
+            variable_features,
+        )
+        graph.num_nodes = constraint_features.shape[0] + variable_features.shape[0]
+        graph.pos_actions = torch.FloatTensor(np.asarray(st['pos_actions'], dtype=np.float32))
+        graph.neg_actions = torch.FloatTensor(np.asarray(st['neg_actions'], dtype=np.float32))
+        graph.nsols = 1
+        graph.ntvars = variable_features.shape[0]
+        graph.varInds = [[torch.arange(len(v_map))], [b_vars]]
+        graph.group = 0
+        return graph
 
 class BipartiteNodeData(torch_geometric.data.Data):
     """

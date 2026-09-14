@@ -21,10 +21,10 @@ def main():
     instances = collect_test_instances(cfg.input_dir, cfg.problem_type, cfg.difficulty)
     if not instances:
         raise FileNotFoundError(
-            f"在目录 {cfg.input_dir}/{cfg.problem_type}/{cfg.difficulty} 下未找到 .lp/.mps/.cip 实例文件"
+            f"No .lp/.mps/.cip instances found under {cfg.input_dir}/{cfg.problem_type}/{cfg.difficulty}"
         )
 
-    print(f"找到 {len(instances)} 个测试实例 (目录: {cfg.input_dir}/{cfg.problem_type}/{cfg.difficulty})")
+    print(f"Found {len(instances)} test instances (dir: {cfg.input_dir}/{cfg.problem_type}/{cfg.difficulty})")
 
     evaluator_cfg = {
         "solver": cfg.solver,

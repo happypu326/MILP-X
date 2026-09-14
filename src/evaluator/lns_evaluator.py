@@ -38,7 +38,7 @@ class LNSEvaluator(BaseEvaluator):
         self.device = config.get("device", "cuda:0")
         self.solver_name = config.get("solver", "gurobi")
         self.gnn_type = config.get("gnn_type", "gcn")
-        self.lns_mode = config.get("lns_mode", "prediction")   # 'random' | 'prediction'
+        self.lns_mode = config.get("lns_mode", "prediction")   # 'random' | 'prediction' | 'cllns'
         self.n_iters = config.get("n_iters", 5)
         self.destroy_frac = config.get("destroy_frac", 0.3)
         self.init_time = config.get("init_time", 30)
@@ -48,6 +48,34 @@ class LNSEvaluator(BaseEvaluator):
         self.problem = config.get("problem", config.get("task_name", "MVC"))
         self.maximize = config.get("maximize", self.problem in _MAXIMIZE_TASKS)
         self.seed = config.get("seed", 0)
+        # CL-LNS destroy policy: incumbent-window features + adaptive neighborhood
+        self.window = config.get("window", 3)
+        self.adaptive_gamma = config.get("adaptive_gamma", 1.02)   # grow destroy on no-improve
+        self.adaptive_beta = config.get("adaptive_beta", 0.5)      # cap destroy fraction
+
+    @torch.no_grad()
+    def _cllns_scores(self, ins_path: str, hist_graph) -> Dict[str, float]:
+        """CL-LNS per-variable destroy scores, conditioned on the recent incumbent
+        history (W-step window appended to the variable features)."""
+        A, v_map, v_nodes, c_nodes, b_vars = get_a_new2(ins_path)
+        cons_f = c_nodes.cpu(); cons_f[torch.isnan(cons_f)] = 1
+        edge_idx = A._indices()
+        edge_feat = build_edge_features(edge_idx, A._values(),
+                                        use_edge_coeff=self.use_edge_coeff, num_cons=cons_f.shape[0])
+        W = self.window
+        w = hist_graph[-W:]
+        while len(w) < W:
+            w = [w[0]] + w
+        win = torch.FloatTensor(np.stack(w[-W:], axis=1))          # [n_var, W]
+        vf = torch.cat([v_nodes.cpu(), win], dim=1)
+        out = self.model(cons_f.to(self.device), edge_idx.to(self.device),
+                         edge_feat.to(self.device), vf.to(self.device),
+                         torch.zeros(vf.shape[0], dtype=torch.long, device=self.device))
+        if isinstance(out, tuple):
+            out = out[0]
+        prob = out.sigmoid().cpu().squeeze()
+        names = list(v_map.keys())
+        return {names[i]: float(prob[i]) for i in b_vars.tolist()}, v_map
 
     # ---- predictor marginals (for learning-guided neighborhood) ----------- #
     @torch.no_grad()
@@ -112,14 +140,26 @@ class LNSEvaluator(BaseEvaluator):
                 traj = [best_obj]
                 total_time = time.time() - t0
 
-                nfix = max(0, int(round((1 - self.destroy_frac) * len(bin_names))))
+                # CL-LNS: incumbent-value history in graph order (for the policy features)
+                v_map_ref = None
+                hist_graph = []
+                if self.lns_mode == "cllns":
+                    _A, v_map_ref, _v, _c, _b = get_a_new2(ins_path)
+                    hist_graph = [np.array([round(incumbent.get(nm, 0.0)) for nm in v_map_ref],
+                                           dtype=np.float32)]
+
+                destroy_frac = self.destroy_frac
                 for it in range(self.n_iters):
                     if not incumbent:
                         break
+                    nfix = max(0, int(round((1 - destroy_frac) * len(bin_names))))
                     # priority to DESTROY (higher = more likely unfixed)
                     if self.lns_mode == "prediction":
                         pri = {nm: abs(marg.get(nm, 0.5) - incumbent.get(nm, 0.0))
                                for nm in bin_names}
+                    elif self.lns_mode == "cllns":
+                        scores, _ = self._cllns_scores(ins_path, hist_graph)
+                        pri = {nm: scores.get(nm, 0.5) for nm in bin_names}
                     else:
                         pri = {nm: float(rng.random()) for nm in bin_names}
                     # keep-fixed = the lowest-priority nfix variables
@@ -137,9 +177,17 @@ class LNSEvaluator(BaseEvaluator):
                     obj, vals = self._solve(
                         s, self.iter_time, os.path.join(self.log_dir, f"{ins_name}.it{it}.log"))
                     total_time += time.time() - t1
-                    if self._better(obj, best_obj):
+                    improved = self._better(obj, best_obj)
+                    if improved:
                         best_obj, incumbent = obj, vals
                     traj.append(best_obj)
+
+                    if self.lns_mode == "cllns":
+                        hist_graph.append(np.array([round(incumbent.get(nm, 0.0)) for nm in v_map_ref],
+                                                   dtype=np.float32))
+                        # adaptive neighborhood: enlarge the destroy set on no improvement
+                        if not improved:
+                            destroy_frac = min(self.adaptive_beta, self.adaptive_gamma * destroy_frac)
 
                 results.append({
                     "instance": ins_name, "status": "ok",

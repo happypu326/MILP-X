@@ -113,7 +113,7 @@ class MinimumVertexCoverGenerator(BaseGenerator):
         return create_opt_vc_gurobi(graph)
 
     def make_filename(self, idx: int, **kwargs) -> str:
-        # 输出 .lp
+        # write the .lp file
         return f"mvc_{self.graph_type}_{self.min_n}to{self.max_n}_{idx+1:04d}.lp"
 
     def persist_instance(self, instance, output_dir, *, idx: int, **kwargs):

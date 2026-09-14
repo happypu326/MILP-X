@@ -1,0 +1,21 @@
+# Constraint Matters preprocessing: full-budget solutions + per-constraint
+# critical-tight-constraint (CTC) labels derived from the best solution.
+
+task: CA
+mode: train
+difficulty: easy
+
+solver: gurobi
+max_time: 100
+max_solutions: 500
+
+# CTC labelling
+use_tcp: true         # restrict tight labels to high-priority constraint types (TCP JUDGE)
+tight_tol: 1.0e-6
+n_min: 1              # min tight members for a type to be selected (raise on large instances)
+
+workers: 8
+threads: 1
+
+data_dir: ./data/${mode}/${task}/${difficulty}
+output_dir: ./dataset/${mode}/${solver}/${task}/${difficulty}/${max_time}s/

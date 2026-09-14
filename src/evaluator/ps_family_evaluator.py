@@ -7,6 +7,14 @@ from typing import List, Dict, Any, Optional, Tuple
 from .base_evaluator import BaseEvaluator
 from src.utils.utils import get_a_new2, build_edge_features
 from src.solver.solver_utils import SOLVER_CLASSES
+from src.learning.model.bipartite_encoders import GNN_REGISTRY
+
+# encoders that share the plain PS forward signature
+# (constraint_features, edge_indices, edge_features, variable_features,
+#  batch_indices) -> per-variable logits. Registry-driven so additional
+# bipartite encoders (bipartite_gin / rwse / substructure / ...) work without
+# editing this file.
+PLAIN_FORWARD_GNN_TYPES = ("gcn",) + tuple(GNN_REGISTRY)
 
 class PSFamilyEvaluator(BaseEvaluator):
     """
@@ -70,7 +78,7 @@ class PSFamilyEvaluator(BaseEvaluator):
         )
         batch_indices = torch.zeros(v_nodes.shape[0], dtype=torch.long)
 
-        if self.gnn_type in ('gcn', 'gasse', 'bipartite_attention', 'random_feature', 'tripartite', 'graph_transformer'):
+        if self.gnn_type in PLAIN_FORWARD_GNN_TYPES:
             BD = self.model(
                 constraint_features.to(self.device),
                 edge_indices.to(self.device),
@@ -103,11 +111,14 @@ class PSFamilyEvaluator(BaseEvaluator):
                 variable_features_batch.to(self.device)
             )
             BD = BD.sigmoid().cpu().squeeze()
+        else:
+            raise ValueError(
+                f"Unsupported gnn_type '{self.gnn_type}' for PSFamilyEvaluator")
 
         all_varname=[]
         for name in v_map:
             all_varname.append(name)
-        binary_name=[all_varname[i] for i in b_vars]
+        binary_name=set(all_varname[i] for i in b_vars)
         scores=[]
         for i in range(len(v_map)):
             type="C"

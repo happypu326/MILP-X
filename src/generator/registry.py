@@ -42,14 +42,14 @@ def _resolve_spec(spec: GeneratorSpec) -> Type[BaseGenerator]:
         cls = getattr(module, class_name)
 
     if not issubclass(cls, BaseGenerator):
-        raise TypeError(f"{cls} 不是 BaseGenerator 的子类。")
+        raise TypeError(f"{cls} is not a subclass of BaseGenerator.")
     return cls
 
 
 def register_generator(name: str, spec: GeneratorSpec) -> None:
     key = name.lower().strip()
     if not key:
-        raise ValueError("生成器名称不能为空。")
+        raise ValueError("Generator name must not be empty.")
     _GENERATOR_REGISTRY[key] = spec
     _CLASS_CACHE.pop(key, None)
 
@@ -67,7 +67,7 @@ def get_generator_class(name: str) -> Type[BaseGenerator]:
 
     if key not in _GENERATOR_REGISTRY:
         available = ", ".join(sorted(_GENERATOR_REGISTRY.keys()))
-        raise ValueError(f"未知生成器 '{name}'。可用生成器: {available}")
+        raise ValueError(f"Unknown generator '{name}'. Available: {available}")
 
     cls = _resolve_spec(_GENERATOR_REGISTRY[key])
     _CLASS_CACHE[key] = cls

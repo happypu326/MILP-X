@@ -1,5 +1,5 @@
 """
-PS_family (Predict and Search) 训练器
+Predict-and-Search family trainer
 """
 
 import torch

@@ -1,0 +1,42 @@
+# EnCore training: predict per-variable early-to-final consistency.
+method_type: EnCore
+task: MVC
+difficulty: hard
+gurobi_time: "3600s"
+solver_settings: gurobi
+
+device: cuda:0
+seed: 0
+
+# Data
+data_dir: ./dataset
+batch_size: 1
+num_workers: 0
+train_split: 0.7
+
+use_edge_coeff: true
+edge_nfeats: 2
+
+# Model: any PS-family bipartite encoder. The early-solution value is appended as
+# a 7th variable feature, so variable_nfeats = 7.
+gnn_type: gasse
+emb_size: 64
+constraint_nfeats: 4
+variable_nfeats: 7
+
+# Encoder hyper-parameters
+depth: 4
+jumping_knowledge: true
+heads: 4
+dropout: 0.0
+
+# Training
+lr: 0.00001
+num_epochs: 2000
+patience: 100
+min_delta: 1.0e-5
+
+# Saving
+model_save_dir: ./pretrain_models
+log_save_dir: ./train_logs
+save_top_k: 3

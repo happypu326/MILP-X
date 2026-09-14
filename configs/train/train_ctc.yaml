@@ -1,0 +1,35 @@
+# Constraint Matters training: dual-head (variable + constraint criticality).
+method_type: CTC
+task: CA
+difficulty: easy
+gurobi_time: "100s"
+solver_settings: gurobi
+
+device: cuda:0
+seed: 0
+
+data_dir: ./dataset
+batch_size: 1
+num_workers: 0
+train_split: 0.7
+
+use_edge_coeff: true
+edge_nfeats: 2
+
+emb_size: 64
+constraint_nfeats: 4
+variable_nfeats: 6
+
+# Dual focal loss
+ctc_lambda: 0.4        # weight on the variable head (1-lambda on the constraint head)
+focal_alpha: 0.75
+focal_gamma: 2.0
+
+lr: 0.00001
+num_epochs: 2000
+patience: 100
+min_delta: 1.0e-5
+
+model_save_dir: ./pretrain_models
+log_save_dir: ./train_logs
+save_top_k: 3

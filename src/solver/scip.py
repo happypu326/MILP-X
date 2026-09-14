@@ -114,6 +114,33 @@ class SCIPSolver(Solver):
 		objs = np.array(objs, dtype=np.float32)
 		return sols, objs
 
+	def collect_early_solution(self, time_limit=20, threads=1, top_k=3):
+		"""Probing solve for EnCore (see GurobiSolver.collect_early_solution).
+		Returns (early_sols, x_ES, t_probe)."""
+		if threads == 0:
+			threads = 1
+		self.model.setParam("limits/time", time_limit)
+		self.model.setParam("parallel/maxnthreads", threads)
+		start = time.time()
+		self.model.optimize()
+		t_probe = time.time() - start
+
+		mvars = self.get_vars()
+		scip_sols = self.model.getSols()
+		if not scip_sols:
+			return [], None, t_probe
+		sols, objs = [], []
+		for sol in scip_sols:
+			sols.append(np.array([sol[v] for v in mvars], dtype=np.float32))
+			objs.append(float(self.model.getSolObjVal(sol)))
+		maximize = (self.model.getObjectiveSense() == "maximize")
+		order = np.argsort(objs)
+		if maximize:
+			order = order[::-1]
+		ordered = [sols[i] for i in order]
+		return ordered[:top_k], ordered[0], t_probe
+
+
 
 class SCIPLogger(scip.Eventhdlr):
 

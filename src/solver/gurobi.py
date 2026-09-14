@@ -128,9 +128,42 @@ class GurobiSolver(Solver):
 
 	def get_status(self):
 		return int(self.model.Status)
-	
+
 	def get_gap(self):
 		if self.model.SolCount == 0:
 			return None
 		return float(self.model.MIPGap)
+
+	def collect_early_solution(self, time_limit=20, threads=1, top_k=3):
+		"""Probing solve for EnCore: run the solver for a short budget and return
+		the incumbents it found. Returns (early_sols, x_ES, t_probe):
+		  early_sols : list of up to top_k solution vectors (var order = get_vars),
+		               best objective first;
+		  x_ES       : the best incumbent (np.ndarray) -- the "early solution";
+		  t_probe    : wall-clock seconds spent probing.
+		A short time-limited solve is used as a practical proxy for the paper's
+		dual-gap-decay stopping rule."""
+		self.model.Params.TimeLimit = time_limit
+		self.model.Params.Threads = threads
+		start = time.time()
+		self.model.optimize()
+		t_probe = time.time() - start
+
+		solc = int(self.model.getAttr('SolCount'))
+		if solc == 0:
+			return [], None, t_probe
+		sols, objs = [], []
+		for sn in range(solc):
+			self.model.Params.SolutionNumber = sn
+			sols.append(np.array(self.model.Xn, dtype=np.float32))
+			objs.append(float(self.model.PoolObjVal))
+		# best-objective first (respect optimization sense)
+		maximize = (self.model.ModelSense == GRB.MAXIMIZE)
+		order = np.argsort(objs)
+		if maximize:
+			order = order[::-1]
+		ordered = [sols[i] for i in order]
+		x_es = ordered[0]
+		return ordered[:top_k], x_es, t_probe
+
 

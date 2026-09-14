@@ -1,0 +1,38 @@
+# CL-LNS destroy-policy training (contrastive InfoNCE over destroy actions).
+method_type: CLLNS
+task: MVC
+difficulty: easy
+
+device: cuda:0
+seed: 0
+
+# directory of collected state pickles (from scripts/preprocess/cllns_collect.py)
+data_dir: ./dataset/cllns/${task}/${difficulty}/
+train_split: 0.8
+batch_size: 1            # one LNS state per item
+num_workers: 0
+
+use_edge_coeff: true
+edge_nfeats: 2
+
+# GAT destroy policy; variable_nfeats = 6 base + window incumbent-history columns
+gnn_type: bipartite_attention
+emb_size: 64
+constraint_nfeats: 4
+window: 3
+variable_nfeats: 9       # 6 + window
+depth: 2
+heads: 8
+dropout: 0.0
+
+# contrastive loss
+tau: 0.07
+
+lr: 0.001
+num_epochs: 200
+patience: 50
+min_delta: 1.0e-5
+
+model_save_dir: ./pretrain_models
+log_save_dir: ./train_logs
+save_top_k: 3

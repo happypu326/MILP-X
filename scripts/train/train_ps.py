@@ -1,7 +1,7 @@
 """
-PS (Predict and Search) 方法训练脚本
+Predict-and-Search training script
 
-使用方法:
+Usage:
     python scripts/train/train_ps.py
     python scripts/train/train_ps.py task=CA difficulty=easy
     python scripts/train/train_ps.py lr=0.001 device=cuda:3

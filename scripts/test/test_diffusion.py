@@ -25,7 +25,7 @@ def build_model(cfg_dict, device):
     ).to(device)
 
     if not os.path.exists(cfg_dict["model_path"]):
-        raise FileNotFoundError(f"模型文件未找到: {cfg_dict['model_path']}")
+        raise FileNotFoundError(f"Model file not found: {cfg_dict['model_path']}")
 
     state_dict = torch.load(cfg_dict["model_path"], map_location=device)
     model.load_state_dict(state_dict, strict=False)
